@@ -124,7 +124,7 @@ def visualize(sort):
 
     print("Setting up shuffled image..")
     ## Init Shuffled Image
-    SIZE = 300
+    SIZE = 900
     FRAMERATE = 24
     VIDEOLENGTH = 15
     sort_algorithm = sort.__name__
@@ -178,5 +178,5 @@ def visualize(sort):
     print("Done!")
 
 if __name__ == "__main__":
-    visualize(insert_sort)
+    visualize(select_sort)
 
