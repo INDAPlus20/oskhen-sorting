@@ -1,14 +1,14 @@
 import random
 import numpy as np
-from PIL import Image
 from skimage import color, io
 from imageio import imwrite
 import cv2
 import subprocess
 import glob
 import os
+import argparse
 
-## Selection Sort
+## Selection Sort 
 def select_sort(x):
     swaps = list()
     for i in range(len(x)):
@@ -114,20 +114,31 @@ def heap_sort(x):
         heap[i], heap[0] = heap[0], heap[i]
     return(heap)
 
+# Don't want no arbitrary code execution here!
+function_mappings = {
+    "Selection" : select_sort,
+    "Insertion" : insert_sort,
+}
+
+
 def make_swap(img, row, move):
     placeholder = img[row,move[0],:].copy()
     img[row, move[0],:] = img[row, move[1],:]
     img[row, move[1],:] = placeholder
     return img
 
-def visualize(sort):
+def visualize(sort, SIZE, FRAMERATE, VIDEOLENGTH, OUTPUT=""):
+
+    sort_algorithm = sort.__name__
+    if OUTPUT == "":
+        OUTPUT = f"{sort_algorithm}-visualized.mp4"
+
+    print("Generating video with following settings:")
+    print(f"Size: {SIZE}\nFramerate: {FRAMERATE}\nVideolength: {VIDEOLENGTH}\nAlgorithm: {sort_algorithm}\nOutput file: {OUTPUT}\n")
 
     print("Setting up shuffled image..")
     ## Init Shuffled Image
-    SIZE = 900
-    FRAMERATE = 24
-    VIDEOLENGTH = 15
-    sort_algorithm = sort.__name__
+    
 
     img = np.zeros((SIZE, SIZE, 3), dtype='float32')
 
@@ -169,7 +180,22 @@ def visualize(sort):
             image_current_step += 1
 
     print("Creating video...")
-    subprocess.run(["ffmpeg", "-framerate", str(FRAMERATE), "-i", f"{sort_algorithm}-%05d.png", f"{sort_algorithm}-visualized.mp4"], capture_output=True)
+    if os.path.isfile(OUTPUT):
+        while True:
+            choice = input(f"File with name {OUTPUT} already exists. Do you want to proceed and overwrite previous file? [y/N]: ").capitalize()
+            if choice == "Y":
+                os.remove(f"{OUTPUT}")
+                print("Overwriting..")
+                break
+            elif choice == "N" or choice == "":
+                print("Aborting...")
+                files = glob.glob(f"{sort_algorithm}-*.png")
+                for png in files:
+                    os.remove(png)
+                exit()
+                
+        
+    subprocess.run(["ffmpeg", "-framerate", str(FRAMERATE), "-i", f"{sort_algorithm}-%05d.png", OUTPUT], capture_output=True)
 
     print("Cleaning up frames..")
     files = glob.glob(f"{sort_algorithm}-*.png")
@@ -177,6 +203,24 @@ def visualize(sort):
         os.remove(png)
     print("Done!")
 
-if __name__ == "__main__":
-    visualize(select_sort)
+def init_parser():
+    parser = argparse.ArgumentParser(description="Visualize various sorting algorithms")
+
+    parser.add_argument("-s", "--size", default=300, action="store", type=int, dest="SIZE", help="The size of the output video in pixels, frames made up of NxN pixels. Defaults to 300x300")
+    parser.add_argument("-f", "--framerate", default=24, action="store", type=int, dest="FRAMERATE", help="The framerate of the video, amount of frames per second. Defaults to 24")
+    parser.add_argument("-l", "--length", default=5, action="store", type=int, dest="VIDEOLENGTH", help="The length of the output video in seconds. Defaults to 5.")
+    parser.add_argument("SORT", action="store", help="The sorting algorithm to visualize. Currently available are: Insertion, Selection")
+    parser.add_argument("-o", "--output", default="", action="store", type=str, dest="OUTPUT", help="Name of output video file. Defaults to {sort_algorithm}-visualized.mp4")
+
+    return parser
+
+if __name__ == "__main__":  
+    parser = init_parser()
+    results = parser.parse_args()
+    try:
+        sortingmethod = function_mappings[results.SORT]
+    except:
+        print("See -h for usage.")
+        exit()
+    visualize(sortingmethod, results.SIZE, results.FRAMERATE, results.VIDEOLENGTH)
 
