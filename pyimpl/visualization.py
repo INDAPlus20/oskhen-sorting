@@ -7,6 +7,7 @@ import subprocess
 import glob
 import os
 import argparse
+from math import log10
 
 ## Selection Sort 
 def select_sort(x):
@@ -37,39 +38,47 @@ def insert_sort(x):
 ## Merge Sort
 
 def merge_sort(x):
+    swaps = list()
 
-    def merge(a, b):
-        output = list()
-        while len(a) != 0 and len(b) != 0:
-            if a[0] < b[0]:
-                output.append(a[0])
-                a.pop(0)
+    def _merge_sort(x, offset=0):
+        def merge(a, b):
+            output = list()
+            while len(a) != 0 and len(b) != 0:
+                if a[0] < b[0]:
+                    output.append(a[0])
+                    a.pop(0)
+                else:
+                    output.append(b[0])
+                    b.pop(0)
+            
+            for x in a:
+                output.append(x)
+            for x in b:
+                output.append(x)
+
+            return output
+            
+        if len(x) <= 1:
+            return x
+        
+        left = list()
+        right = list()
+        for i, element in enumerate(x):
+            if i < (len(x)/2):
+                left.append(element)
             else:
-                output.append(b[0])
-                b.pop(0)
+                right.append(element)
+
+        left = _merge_sort(left, offset)
+        right = _merge_sort(right, offset+len(right))
+
+        merged = merge(left, right)
         
-        for x in a:
-            output.append(x)
-        for x in b:
-            output.append(x)
+        swaps.append([offset, merged.copy()])
 
-        return output
-        
-    if len(x) <= 1:
-        return x
-    
-    left = list()
-    right = list()
-    for i, element in enumerate(x):
-        if i < (len(x)/2):
-            left.append(element)
-        else:
-            right.append(element)
+        return merged
 
-    left = merge_sort(left)
-    right = merge_sort(right)
-
-    return merge(left, right)
+    return _merge_sort(x), swaps
 
 ## Counting Sort
 
@@ -118,13 +127,26 @@ def heap_sort(x):
 function_mappings = {
     "Selection" : select_sort,
     "Insertion" : insert_sort,
+    "Merge" : merge_sort,
 }
 
+type_mappings = {
+
+    "select_sort" : "swap",
+    "insert_sort" : "swap",
+    "merge_sort" : "replace",
+
+}
 
 def make_swap(img, row, move):
     placeholder = img[row,move[0],:].copy()
     img[row, move[0],:] = img[row, move[1],:]
     img[row, move[1],:] = placeholder
+    return img
+
+def make_replace(img, row, move):
+    for i in range(len(move[1])):
+        img[row, i+move[0],0] = move[1][i]
     return img
 
 def visualize(sort, SIZE, FRAMERATE, VIDEOLENGTH, OUTPUT=""):
@@ -133,51 +155,76 @@ def visualize(sort, SIZE, FRAMERATE, VIDEOLENGTH, OUTPUT=""):
     if OUTPUT == "":
         OUTPUT = f"{sort_algorithm}-visualized.mp4"
 
+    if OUTPUT[-4:] != ".mp4":
+        OUTPUT += ".mp4"
+
+    COLUMN = SIZE # X-Axis
+    ROW = SIZE # Y-Axis, needs to be <=Column for proper effect.
+    TYPE = type_mappings[sort_algorithm]
+
     print("Generating video with following settings:")
-    print(f"Size: {SIZE}\nFramerate: {FRAMERATE}\nVideolength: {VIDEOLENGTH}\nAlgorithm: {sort_algorithm}\nOutput file: {OUTPUT}\n")
+    print(f"Size: {ROW}x{COLUMN}\nFramerate: {FRAMERATE}\nVideolength: {VIDEOLENGTH}\nAlgorithm: {sort_algorithm}\nOutput file: {OUTPUT}\nSorting type: {TYPE}\n")
 
-    print("Setting up shuffled image..")
     ## Init Shuffled Image
-    
+    print("Setting up shuffled image..")
 
-    img = np.zeros((SIZE, SIZE, 3), dtype='float32')
+    img = np.zeros((ROW, COLUMN, 3), dtype='float32') # Initialize array SIZExSIZE where each element is a pixel (RGB).
 
-    for i in range(img.shape[1]):
-        img[:,i,:] = i / img.shape[1], 1.0, 1.0
+    for i in range(COLUMN):
+        img[:,i] = i / COLUMN, 1.0, 1.0 # Change every innermost element (Pixel), creating a rainbow effect if thought of as (HSV) pixels (HSV = [0,1], RGB = [0,255]) HSV = Hue, Saturation, Value(Brightness). Changes Hue (Color) Only. 
 
-    for i in range(img.shape[0]):
-        np.random.shuffle(img[i,:,:])
+    # RGB_Rainbow = (color.convert_colorspace(img, 'HSV', 'RGB'))
+    # cv2.imshow("Generated Rainbow", RGB_Rainbow)
+    # cv2.waitKey()
+
+    for i in range(ROW):
+        np.random.shuffle(img[i]) # Shuffles pixels around
 
     ## --
-
+    
     print("Sorting image..")
 
     moves = list()
     maxMoves = 0
 
-    for i in range(img.shape[0]):
-        _, newMoves = sort(list(img[i,:,0]))
+    for i in range(ROW):
+        _, newMoves = sort(list(img[i,:,0])) # Sorts each row and saves the work done.
         moves.append(newMoves)
         if len(newMoves) > maxMoves:
             maxMoves = len(newMoves)
 
-
     # x second movie with y frames, x*y images.
     image_step_length = maxMoves // (FRAMERATE * VIDEOLENGTH)
+    assert image_step_length > 0, f"Requires {(FRAMERATE * VIDEOLENGTH)} frames, only {maxMoves} frames available!"
     image_current_step = 0
 
     print("Recreating sort and saving imageframes...")
 
-    for i in range(maxMoves):
-        for j in range(img.shape[0]):
-            if i < len(moves[j])-1:
-                img = make_swap(img, j, moves[j][i])
+    # Algorithm sorts each row individually, we simulate but one move/row 
+    for i in range(maxMoves): # For each move
+        for j in range(ROW): # Per Row
+            if i < len(moves[j]): # If that move was done that row
+                if TYPE == "swap":
+                    img = make_swap(img, j, moves[j][i]) # Make it
+                elif TYPE == "replace":
+                    img = make_replace(img, j, moves[j][i])
 
         if i % image_step_length == 0:
             name = f"{sort_algorithm}-{image_current_step:05}.png"
             in_rgb = (color.convert_colorspace(img, 'HSV', 'RGB')*255)
             cv2.imwrite(name, in_rgb)
             image_current_step += 1
+    # RGB_Rainbow = (color.convert_colorspace(img, 'HSV', 'RGB'))
+    # cv2.imshow("Generated Rainbow", RGB_Rainbow)
+    # cv2.waitKey()
+    # exit()
+    
+    ## Always capture last frame
+    name = f"{sort_algorithm}-{image_current_step:05}.png"
+    in_rgb = (color.convert_colorspace(img, 'HSV', 'RGB'))
+    cv2.imwrite(name, in_rgb)
+    # cv2.imshow("last frame", in_rgb)
+    # cv2.waitKey()
 
     print("Creating video...")
     if os.path.isfile(OUTPUT):
@@ -195,7 +242,7 @@ def visualize(sort, SIZE, FRAMERATE, VIDEOLENGTH, OUTPUT=""):
                 exit()
                 
         
-    subprocess.run(["ffmpeg", "-framerate", str(FRAMERATE), "-i", f"{sort_algorithm}-%05d.png", OUTPUT], capture_output=True)
+    subprocess.run(["ffmpeg", "-framerate", str(FRAMERATE), "-i", f"{sort_algorithm}-%05d.png", f"{OUTPUT}"], capture_output=True)
 
     print("Cleaning up frames..")
     files = glob.glob(f"{sort_algorithm}-*.png")
@@ -209,7 +256,7 @@ def init_parser():
     parser.add_argument("-s", "--size", default=300, action="store", type=int, dest="SIZE", help="The size of the output video in pixels, frames made up of NxN pixels. Defaults to 300x300")
     parser.add_argument("-f", "--framerate", default=24, action="store", type=int, dest="FRAMERATE", help="The framerate of the video, amount of frames per second. Defaults to 24")
     parser.add_argument("-l", "--length", default=5, action="store", type=int, dest="VIDEOLENGTH", help="The length of the output video in seconds. Defaults to 5.")
-    parser.add_argument("SORT", action="store", help="The sorting algorithm to visualize. Currently available are: Insertion, Selection")
+    parser.add_argument("SORT", action="store", help="The sorting algorithm to visualize. Currently available are: Insertion, Selection, Merge")
     parser.add_argument("-o", "--output", default="", action="store", type=str, dest="OUTPUT", help="Name of output video file. Defaults to {sort_algorithm}-visualized.mp4")
 
     return parser
@@ -222,5 +269,5 @@ if __name__ == "__main__":
     except:
         print("See -h for usage.")
         exit()
-    visualize(sortingmethod, results.SIZE, results.FRAMERATE, results.VIDEOLENGTH)
+    visualize(sortingmethod, results.SIZE, results.FRAMERATE, results.VIDEOLENGTH, results.OUTPUT)
 
