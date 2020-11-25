@@ -7,7 +7,8 @@ import subprocess
 import glob
 import os
 import argparse
-from math import log10
+from math import log10, floor
+import struct
 
 ## Selection Sort 
 def select_sort(x):
@@ -80,22 +81,66 @@ def merge_sort(x):
 
     return _merge_sort(x), swaps
 
-## Counting Sort
+## Radix Sort - Float version
 
-def count_sort(x):
-    maxi = max(x)
-    count = [0]*(maxi+1) #Arrays start at 0
-    for val in x:
-        count[val] += 1
+def radix_sort(x):
+
+    swaps = list()
+
+    ## Floats
+
+    ## https://stackoverflow.com/a/16445458
+    def float2int(value):
+        return sum(b << 8*i for i,b in enumerate(struct.pack('f', value)))
+
+    keyvalue_mapping = dict()
+    floats = list()
+
+
+    for i in range(len(x)):
+        floats.append(float2int(float(x[i])))
+        keyvalue_mapping[floats[i]] = x[i]
+
+    def counting_sort(values, keys): # Assumes keys are integers and keys[i] is the key for the value values[i]
+        output = [0] * len(values)
+        freq = [0] * (max(keys) + 1)
+
+        for element in keys:
+            freq[element] += 1
+        
+        for i in range(1,len(freq)):
+            freq[i] += freq[i-1]
+        
+
+        for i in range(len(values)-1, -1, -1):
+            output[freq[keys[i]]-1] = values[i] #-1 bcs arrays start at 0
+            freq[keys[i]] -= 1
+
+        swaps.append([0, [keyvalue_mapping[i] for i in values]])
+        return output
+
+    maxi = max(floats)
+
+    if maxi > 0:
+        maxi = floor(log10(maxi) + 1)
+    else:
+        maxi = 1
+
+    for radix in range(0, maxi):
+        keys = [(element // 10**radix % 10) for element in floats]
+        floats = counting_sort(floats, keys)
+    
     output = list()
-    for index, element in enumerate(count):
-        output += [index]*element
-    return output
+    for el in floats:
+        output.append(keyvalue_mapping[el])
+        
+    return output, swaps
 
 ## Heap Sort
 
 def heap_sort(x):
 
+    swaps = list()
     def heapify(A, i, limit):
         left_idx = 2*i + 1
         right_idx = 2*i + 2
@@ -109,6 +154,7 @@ def heap_sort(x):
         
         if parent_idx != i:
             A[i], A[parent_idx] = A[parent_idx], A[i]
+            swaps.append([i, parent_idx])
             heapify(A, parent_idx, limit)
 
     def build_heap(x):
@@ -121,13 +167,16 @@ def heap_sort(x):
     for i in range(len(x) - 1, 0, -1):
         heapify(heap, 0, i+1)
         heap[i], heap[0] = heap[0], heap[i]
-    return(heap)
+        swaps.append([i, 0])
+    return heap,swaps
 
 # Don't want no arbitrary code execution here!
 function_mappings = {
     "Selection" : select_sort,
     "Insertion" : insert_sort,
     "Merge" : merge_sort,
+    "Heap" : heap_sort,
+    "Radix" : radix_sort
 }
 
 type_mappings = {
@@ -135,7 +184,8 @@ type_mappings = {
     "select_sort" : "swap",
     "insert_sort" : "swap",
     "merge_sort" : "replace",
-
+    "heap_sort" : "swap",
+    "radix_sort" : "replace",
 }
 
 def make_swap(img, row, move):
@@ -178,7 +228,7 @@ def visualize(sort, SIZE, FRAMERATE, VIDEOLENGTH, OUTPUT=""):
     # cv2.waitKey()
 
     for i in range(ROW):
-        np.random.shuffle(img[i]) # Shuffles pixels around
+        np.random.shuffle(img[i]) # Shuffles pixels around (Only in the same row)
 
     ## --
     
@@ -192,6 +242,7 @@ def visualize(sort, SIZE, FRAMERATE, VIDEOLENGTH, OUTPUT=""):
         moves.append(newMoves)
         if len(newMoves) > maxMoves:
             maxMoves = len(newMoves)
+
 
     # x second movie with y frames, x*y images.
     image_step_length = maxMoves // (FRAMERATE * VIDEOLENGTH)
@@ -256,7 +307,7 @@ def init_parser():
     parser.add_argument("-s", "--size", default=300, action="store", type=int, dest="SIZE", help="The size of the output video in pixels, frames made up of NxN pixels. Defaults to 300x300")
     parser.add_argument("-f", "--framerate", default=24, action="store", type=int, dest="FRAMERATE", help="The framerate of the video, amount of frames per second. Defaults to 24")
     parser.add_argument("-l", "--length", default=5, action="store", type=int, dest="VIDEOLENGTH", help="The length of the output video in seconds. Defaults to 5.")
-    parser.add_argument("SORT", action="store", help="The sorting algorithm to visualize. Currently available are: Insertion, Selection, Merge")
+    parser.add_argument("SORT", action="store", help="The sorting algorithm to visualize. Currently available are: Insertion, Selection, Merge, Heap, Radix")
     parser.add_argument("-o", "--output", default="", action="store", type=str, dest="OUTPUT", help="Name of output video file. Defaults to {sort_algorithm}-visualized.mp4")
 
     return parser

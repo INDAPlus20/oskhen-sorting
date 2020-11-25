@@ -1,4 +1,5 @@
 from math import log10, floor
+import struct
 
 ## Selection Sort
 def select_sort(x):
@@ -92,7 +93,7 @@ def heap_sort(x):
 
 ## Radix sort
 
-def radix_sort(x):
+def radix_sort_int(x):
 
     def counting_sort(values, keys): # Assumes keys are integers and keys[i] is the key for the value values[i]
         output = [0] * len(values)
@@ -124,6 +125,55 @@ def radix_sort(x):
     
     return x
 
+def radix_sort_float(x):
+
+    ## Floats
+
+    ## https://stackoverflow.com/a/16445458
+    def float2int(value):
+        return sum(b << 8*i for i,b in enumerate(struct.pack('f', value)))
+
+    keyvalue_mapping = dict()
+    floats = list()
+
+
+    for i in range(len(x)):
+        floats.append(float2int(float(x[i])))
+        keyvalue_mapping[floats[i]] = x[i]
+
+    def counting_sort(values, keys): # Assumes keys are integers and keys[i] is the key for the value values[i]
+        output = [0] * len(values)
+        freq = [0] * (max(keys) + 1)
+
+        for element in keys:
+            freq[element] += 1
+        
+        for i in range(1,len(freq)):
+            freq[i] += freq[i-1]
+        
+
+        for i in range(len(values)-1, -1, -1):
+            output[freq[keys[i]]-1] = values[i] #-1 bcs arrays start at 0
+            freq[keys[i]] -= 1
+
+        return output
+
+    maxi = max(floats)
+
+    if maxi > 0:
+        maxi = floor(log10(maxi) + 1)
+    else:
+        maxi = 1
+
+    for radix in range(0, maxi):
+        keys = [(element // 10**radix % 10) for element in floats]
+        floats = counting_sort(floats, keys)
+    
+    output = list()
+    for el in floats:
+        output.append(keyvalue_mapping[el])
+        
+    return output
 
 if __name__ == "__main__":
     a = [7, 2, 9, 8, 9, 4, 4, 4, 1, 11, 1, 0, 10, 3, 5, 6]
@@ -131,4 +181,4 @@ if __name__ == "__main__":
     c = [4, 2, 3, 1]
     d = [1, 3, 1]
     e = [7, 2, 9, 8, 9, 4, 4, 4, 1, 1, 0, 3, 5, 6]
-    print(radix_sort(a))
+    print(radix_sort_float(b))
