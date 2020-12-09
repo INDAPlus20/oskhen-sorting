@@ -1,7 +1,7 @@
 import random
 import numpy as np
 from skimage import color, io
-from imageio import imwrite
+from imageio import imwrite, mimwrite
 import cv2
 import subprocess
 import glob
@@ -9,6 +9,7 @@ import os
 import argparse
 from math import log10, floor
 import struct
+from progressbar import ProgressBar
 
 ## Selection Sort 
 def select_sort(x):
@@ -237,7 +238,9 @@ def visualize(sort, SIZE, FRAMERATE, VIDEOLENGTH, OUTPUT=""):
     moves = list()
     maxMoves = 0
 
-    for i in range(ROW):
+    pbar = ProgressBar()
+
+    for i in pbar(range(ROW)):
         _, newMoves = sort(list(img[i,:,0])) # Sorts each row and saves the work done.
         moves.append(newMoves)
         if len(newMoves) > maxMoves:
@@ -250,9 +253,12 @@ def visualize(sort, SIZE, FRAMERATE, VIDEOLENGTH, OUTPUT=""):
     image_current_step = 0
 
     print("Recreating sort and saving imageframes...")
+    pbar = ProgressBar()
+
+    #giflist = list()
 
     # Algorithm sorts each row individually, we simulate but one move/row 
-    for i in range(maxMoves): # For each move
+    for i in pbar(range(maxMoves)): # For each move
         for j in range(ROW): # Per Row
             if i < len(moves[j]): # If that move was done that row
                 if TYPE == "swap":
@@ -261,6 +267,7 @@ def visualize(sort, SIZE, FRAMERATE, VIDEOLENGTH, OUTPUT=""):
                     img = make_replace(img, j, moves[j][i])
 
         if i % image_step_length == 0:
+            #giflist.append(color.convert_colorspace(img, 'HSV', 'RGB')*255)
             name = f"{sort_algorithm}-{image_current_step:05}.png"
             in_rgb = (color.convert_colorspace(img, 'HSV', 'RGB')*255)
             cv2.imwrite(name, in_rgb)
@@ -270,6 +277,10 @@ def visualize(sort, SIZE, FRAMERATE, VIDEOLENGTH, OUTPUT=""):
     # cv2.waitKey()
     # exit()
     
+    # OUTPUT += ".gif"
+    # mimwrite(f"{OUTPUT}", giflist, fps=FRAMERATE)
+    # exit()
+
     ## Always capture last frame
     name = f"{sort_algorithm}-{image_current_step:05}.png"
     in_rgb = (color.convert_colorspace(img, 'HSV', 'RGB'))
